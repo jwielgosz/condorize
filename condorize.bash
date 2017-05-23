@@ -110,7 +110,7 @@ elif [ "$1" == "dag" ] ; then
 	mkdir -p ${cz__log_dir}
 
  	cz__job_dir=dag
- 	rm -rf ${cz__job_dir}
+ 	rm -f ${cz__job_dir}/${cz__log_id}.dag*
  	mkdir -p ${cz__job_dir}
 
 	cz__dag_file=${cz__job_dir}/${cz__log_id}.dag
@@ -121,20 +121,79 @@ elif [ "$1" == "dag" ] ; then
 	cat > ${cz__job_file}	<<- EOF
 		Universe=vanilla
 		getenv=True
-		Executable=${cz__cmd}
+		Executable=\$(cmd)
 		Log=${cz__log_dir}/${cz__log_id}.log
 
+		# ----------------------------------------------------------
+		# Custom includes:
+		${cz_include_job}
+		# ----------------------------------------------------------
+		
 		Arguments="\$(args)"
 		Output=${cz__log_dir}/\$(jobname).out
 		Error=${cz__log_dir}/\$(jobname).err
 		Queue
+		
+	EOF
+
+	cat >> ${cz__dag_file}	<<- EOF
+		# ==========================================================
+		# Job: ${cz__log_id}
+		# Generated: $( date )
+		# Source: ${cz__cmd}
+		# ==========================================================
+		
+		# ----------------------------------------------------------
+		# Custom includes:
+		${cz_include_dag}
+		# ----------------------------------------------------------
+		
 	EOF
 
 
+	if [ -n "${cz_post_1}" ] ; then
+		cz__post1_job=${cz__log_id}_post
+		cat >> ${cz__dag_file}	<<- EOF
+			# Post-processing for outer loop (cz_loop_1)
+			JOB ${cz__post1_job} ${cz__job_file}
+			VARS ${cz__post1_job} jobname="\$(JOB)" cmd="${cz_post_1}" args="${cz_post_1_args}"
+			
+		EOF
+	fi
+
+
 	for cz__x1 in $cz_loop_1 ; do
+
+		cat >> ${cz__dag_file}	<<- EOF
+			# ----------------------------------------------------------
+			# cz_loop_1 = $cz__x1
+			# ----------------------------------------------------------
+			 
+		EOF
+
+
+		if [ -n "${cz_post_2}" ] ; then
+			cz__post2_job=${cz__log_id}_post_${cz__x1}
+			cat >> ${cz__dag_file}	<<- EOF
+				# Post-processing for inner loop (cz_loop_2)
+				JOB ${cz__post2_job} ${cz__job_file}
+				VARS ${cz__post2_job} jobname="\$(JOB)" cmd="${cz_post_2}" args="${cz_post_2_args} ${cz__x1}"
+			EOF
+
+			if [ -n "${cz_post_1}" ] ; then
+				cat >> ${cz__dag_file}	<<- EOF
+					PARENT ${cz__post2_job} CHILD ${cz__post1_job}
+				EOF
+			fi
+
+			echo >> ${cz__dag_file}
+
+		fi
+
+
 		for cz__x2 in $cz_loop_2 ; do
 
-			cz__prefix="${cz__log_id}_${cz__x1}_${cz__x2}"
+			cz__job="${cz__log_id}_${cz__x1}_${cz__x2}"
 
 			#cz__job_file=${cz__job_dir}/${cz__prefix}.condor
 
@@ -145,24 +204,25 @@ elif [ "$1" == "dag" ] ; then
 			fi
 			
 			cat >> ${cz__dag_file}	<<- EOF
-				JOB ${cz__prefix} ${cz__job_file}
-				VARS ${cz__prefix} jobname="\$(JOB)"  args="${cz__args}"
+				JOB ${cz__job} ${cz__job_file}
+				VARS ${cz__job} jobname="\$(JOB)" cmd="${cz__cmd}" args="${cz__args}"
 			EOF
+
+			if [ -n "${cz_post_2}" ] ; then
+				cat >> ${cz__dag_file}	<<- EOF
+					PARENT ${cz__job} CHILD ${cz__post2_job}
+				EOF
+			elif [ -n "${cz_post_1}" ] ; then
+				cat >> ${cz__dag_file}	<<- EOF
+					PARENT ${cz__job} CHILD ${cz__post1_job}
+				EOF
+			fi
 			
-			
-			# Generates individual job files
-			# cat > ${cz__job_file}	<<- EOF
-# 				Universe=vanilla
-# 				getenv=True
-# 				Executable=${cz__cmd}
-# 				Log=${cz__log_dir}/${cz__log_id}.log
-# 
-# 				Arguments="\$(args)"
-# 				Output=${cz__log_dir}/${cz__prefix}.out
-# 				Error=${cz__log_dir}/${cz__prefix}.err
-# 				Queue
-# 			EOF
+			echo >> ${cz__dag_file}
+	
 		done
+
+		
 	done
 
 	if ls ${cz__log_dir}/${cz__log_id}* &> /dev/null; then
