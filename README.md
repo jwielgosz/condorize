@@ -13,26 +13,38 @@ Invoking condorize.bash directly does nothing except display this help message.
 
 Example:
 
-1) Add the lines marked with '>' to your script, e.g. myscript.sh:
-
+1) Add the required/optional lines, as indicated below, to your script, e.g. myscript.sh:
+```
 		...
-		# allow testing without use of condor
+		# ----------------------------------------
+		# optional - test without use of condor. 
+		# during a condor run these values will be overridden. 
+		# alternately, could test if cz_arg_1,2 are set, later on
 		cz_arg_1=$1
 		cz_arg_2=$2
 
-	>	 cz_loop_1="101 102 103"	# give condorize.bash a subject list
-	>	 cz_loop_2="1 2"			# give condorize.bash a session list
-	>	 source <path_to_condorize>/condorize.bash		# run the condorize.bash code
+		# ----------------------------------------
+		# optional - set loop values. if not set, these default to "1"
+		cz_loop_1="101 102 103"                     # give condorize.bash a subject list
+		cz_loop_2="1 2"                             # give condorize.bash a session list
 
-		# existing code, to run your actual analysis
-		# e.g...
-		studyID=$cz_arg_1
+		# ----------------------------------------
+                # required
+		source <path_to_condorize>/condorize.bash   # run the condorize code
+		# ----------------------------------------
+		
+		# ----------------------------------------
+		# optional
+		# pass arguments to your existing script
+		# cz_arg_1,2 will be set to loop values for each condor job
+		# e.g.
+		subject=$cz_arg_1          
 		session=$cz_arg_2
 
-		do_something -a -b -c $studyID $session
-		do_something_else -x $studyID -y $session
+		do_something -a -b -c $subject $session
+		do_something_else -x $subject -y $session
 		...
-
+```
 IMPORTANT: condorize.bash directly manipulates the command line arguments ($1, $2, $3).
 Do not modify these arguments above the line that invokes condorize.bash in your
 script.
