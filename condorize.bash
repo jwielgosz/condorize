@@ -47,6 +47,23 @@ if [ "$1" == "condor" ] ; then
 	cz__log_dir=log			# keep it simple for now
 	mkdir -p ${cz__log_dir}
 
+
+	if [ -z "${cz_loop_1}" ] ; then 
+		echo "cz_loop_1 not set; defaulting to single iteration"
+	 	cz_loop_1=1
+	fi
+
+	if [ -z "${cz_loop_2}" ] ; then 
+		echo "cz_loop_2 not set; defaulting to single iteration"
+	 	cz_loop_2=1
+	fi
+
+	cz__n1=$( echo ${cz_loop_1} | wc -w )
+	cz__n2=$( echo ${cz_loop_2} | wc -w )
+	cat <<-EOF
+		Condorizing... [${cz__n1}]x[${cz__n2}]
+
+	EOF
 	cz__submit_file=${cz__log_id}.condor
 
 	cat > ${cz__submit_file} <<- EOF
@@ -72,17 +89,17 @@ if [ "$1" == "condor" ] ; then
 			cat >> ${cz__submit_file}	<<- EOF
 
 				Arguments="${args}"
-				Output=${cz__log_dir}/${cz__prefix}.out
-				Error=${cz__log_dir}/${cz__prefix}.err
+				Output=${cz__log_dir}/${cz__prefix}.out.log
+				Error=${cz__log_dir}/${cz__prefix}.err.log
         Queue
 			EOF
 		done
 	done
 
-	if ls ${cz__log_dir}/${cz__log_id}* &> /dev/null; then
-		cz__old_log_dir=${cz__log_dir}/old.${cz__log_id}.$(date +%F.%T)
+	if ls ${cz__log_dir}/${cz__log_id}.* &> /dev/null; then
+		cz__old_log_dir=${cz__log_dir}/old.${cz__log_id}.$(date +%F.%H-%M-%S)
 		mkdir ${cz__old_log_dir}
-		mv ${cz__log_dir}/${cz__log_id}* ${cz__old_log_dir}/
+		mv ${cz__log_dir}/${cz__log_id}.* ${cz__old_log_dir}/
 		echo "Old logs moved to ${cz__old_log_dir}"
 	fi
 
@@ -118,6 +135,52 @@ elif [ "$1" == "dag" ] ; then
 
 
 	cz__job_file=${cz__dag_file}.singlejob
+
+	if [ -z "${cz_loop_1}" ] ; then 
+		echo "cz_loop_1 not set; defaulting to single iteration"
+	 	cz_loop_1=1
+	fi
+
+	if [ -z "${cz_loop_2}" ] ; then 
+		echo "cz_loop_2 not set; defaulting to single iteration"
+	 	cz_loop_1=2
+	fi
+	
+	cz__n1=$( echo ${cz_loop_1} | wc -w )
+	cz__n2=$( echo ${cz_loop_2} | wc -w )
+	cat <<-EOF
+	
+		Condorizing... [${cz__n1}]x[${cz__n2}]
+
+	EOF
+	
+	if [ -n "${cz_post_1}" ] || [ -n "${cz_post_2}" ] ; then 
+		cat <<-EOF
+			Post-processing:
+			  cz_post_1=${cz_post_1}
+			  cz_post_1_args="${cz_post_1_args}"
+			  
+			  cz_post_2=${cz_post_2}
+			  cz_post_2_args="${cz_post_2_args}"
+			  
+		EOF
+	fi
+	
+	if [ -n "${cz_include_dag}" ] || [ -n "${cz_include_job}" ] ; then 
+		cat <<-EOF
+			----------------------------------------------------------
+			Custom includes
+			cz_include_dag:
+			${cz_include_dag}
+	
+			cz_include_job:
+			${cz_include_job}
+			----------------------------------------------------------
+			
+		EOF
+	fi
+	
+	
 	cat > ${cz__job_file}	<<- EOF
 		Universe=vanilla
 		getenv=True
@@ -130,11 +193,13 @@ elif [ "$1" == "dag" ] ; then
 		# ----------------------------------------------------------
 		
 		Arguments="\$(args)"
-		Output=${cz__log_dir}/\$(jobname).out
-		Error=${cz__log_dir}/\$(jobname).err
+		Output=${cz__log_dir}/\$(jobname).out.log
+		Error=${cz__log_dir}/\$(jobname).err.log
 		Queue
 		
 	EOF
+
+
 
 	cat >> ${cz__dag_file}	<<- EOF
 		# ==========================================================
@@ -157,7 +222,6 @@ elif [ "$1" == "dag" ] ; then
 			# Post-processing for outer loop (cz_loop_1)
 			JOB ${cz__post1_job} ${cz__job_file}
 			VARS ${cz__post1_job} jobname="\$(JOB)" cmd="${cz_post_1}" args="${cz_post_1_args}"
-			
 		EOF
 	fi
 
@@ -206,6 +270,7 @@ elif [ "$1" == "dag" ] ; then
 			cat >> ${cz__dag_file}	<<- EOF
 				JOB ${cz__job} ${cz__job_file}
 				VARS ${cz__job} jobname="\$(JOB)" cmd="${cz__cmd}" args="${cz__args}"
+				CATEGORY ${cz__job} ${cz__log_id}
 			EOF
 
 			if [ -n "${cz_post_2}" ] ; then
@@ -225,16 +290,17 @@ elif [ "$1" == "dag" ] ; then
 		
 	done
 
-	if ls ${cz__log_dir}/${cz__log_id}* &> /dev/null; then
-		cz__old_log_dir=${cz__log_dir}/old.${cz__log_id}.$(date +%F.%T)
+	if ls ${cz__log_dir}/${cz__log_id}.* &> /dev/null; then
+		cz__old_log_dir=${cz__log_dir}/old.${cz__log_id}.$(date +%F.%H-%M-%S)
 		mkdir ${cz__old_log_dir}
-		mv ${cz__log_dir}/${cz__log_id}* ${cz__old_log_dir}/
+		mv ${cz__log_dir}/${cz__log_id}.* ${cz__old_log_dir}/
 		echo "Old logs moved to ${cz__old_log_dir}"
 	fi
 
 	cat <<- MSG
 		To submit:
 		condor_submit_dag ${cz__dag_file}
+		
 	MSG
 
 	exit
